@@ -197,27 +197,23 @@ GetLastBlock:
         jmp .L1
 .L2:    __return rdi
 
-;; heap in rdi
-;; block in rsi
-;; uses rcx
+
 MergePrevBlock:
         __stack_push
-        cmp rdi, 0 ;check if heap is null
+        cmp rdi, 0
         je .EXT
-        cmp rsi, 0 ;check if block is null
+        cmp rsi, 0
         je .EXT
-        cmp qword [rsi+bprev], 0 ;check if block has prev
+        cmp qword [rsi+bprev], 0
         je .EXT 
-        mov rax, [rsi+bprev] ; mov block prev
-        ;%define block_prev rax
-        cmp qword [rax + freed], 0 ; check if prev is free
+        mov rax, [rsi+bprev]
+        cmp qword [rax + freed], 0
         je .EXT
-        mov rcx, [rsi+bnext] ; mov block next
-        ;%define block_next rcx
-        mov [rax + bnext], rcx ;prev-> next = block->next 
-        cmp rcx, 0 ; check if block has next
+        mov rcx, [rsi+bnext]
+        mov [rax + bnext], rcx
+        cmp rcx, 0
         je .L1
-        mov [rcx+bnext], rax
+        mov [rcx+bprev], rax
 .L1:    mov esi, dword [rsi + data_size]
         add dword[rax + data_size], esi
         add dword[rax + data_size], Block_size
@@ -227,38 +223,31 @@ MergePrevBlock:
 .EXT:   __return 0
 
 
-
-;; heap in rdi
-;; block in rsi
-;; uses rcx
 MergeNextBlock:
         __stack_push
-        cmp rdi, 0 ;check if heap is null
+        cmp rdi, 0
         je .EXT
-        cmp rsi, 0 ;check if block is null
+        cmp rsi, 0
         je .EXT
-        cmp qword [rsi+bnext], 0 ;check if block has next
+        cmp qword [rsi+bnext], 0
         je .EXT 
-        mov rcx, [rsi+bnext] ; mov block next
-        ;%define block_next rcx
-        cmp qword [rcx + freed], 0 ; check if next is free
+        mov rcx, [rsi+bnext]
+        cmp qword [rcx + freed], 0
         je .EXT
         mov eax, dword[rcx+data_size]
         add dword[rsi + data_size], eax
         add dword[rsi +data_size], Block_size
         cmp qword[rsi + bnext], 0
         je .L1
-        mov rax, [rcx+bnext] ;;move next->next
+        mov rax, [rcx+bnext]
         cmp rax, 0
         je .L1
-        mov [rax + bprev], rsi ;; next->next->prev
+        mov [rax + bprev], rsi
 .L1:    mov [rsi+bnext], rax
         dec dword[rdi + block_count]
 .EXT:   __return 0
 
-;; heap in rdi
-;; block in rsi
-;; uses rcx
+
 MergeBlock:
         __stack_push
         push rdi
@@ -269,9 +258,7 @@ MergeBlock:
         call MergePrevBlock
         __return rax
 
-;; heap in rdi
-;; block in rsi
-;; uses rcx
+
 RemoveBlockIfLast:
         __stack_push
         cmp dword[rsi+freed], 0
@@ -290,7 +277,6 @@ RemoveBlockIfLast:
 .EXT:   __return 0
 
 
-;; block in rdi
 %macro __setup_block 2
         mov qword[%1+bprev], 0
         mov qword[%1+bnext], 0
@@ -300,23 +286,19 @@ RemoveBlockIfLast:
 
 %define setup_block(block, size) __setup_block block, size
 
-;; block in rdi %1
-;; size in rsi %2
-;; heap in rdx %3
-;; uses rcx
+
 DivideBlock:
         __stack_push
-        push rdi ;push block
-        block_shift(rdi) ;; shift
-        add rdi, rsi ;; add size
-        ;;rdi-> new free block
-        mov rcx, [rsp]; pop block
-        mov rcx, [rcx+bnext] ;; load block->next
-        sub rcx, rdi ; block->next - free_block
-        setup_block(rdi, ecx) ;; setup block
+        push rdi
+        block_shift(rdi)
+        add rdi, rsi
+        mov rcx, [rsp]
+        mov rcx, [rcx+bnext]
+        sub rcx, rdi
+        setup_block(rdi, ecx)
         mov dword[rdi+freed], true
-        mov rcx, [rsp]; load block
-        mov [rdi + bprev], rcx ;
+        mov rcx, [rsp]
+        mov [rdi + bprev], rcx
         mov rcx, [rcx+bnext]
         mov [rdi+bnext], rcx
         inc dword[rdx+block_count]
@@ -326,7 +308,6 @@ DivideBlock:
         mov dword[rcx+freed], false
         __return 0
 
-;; store result in %2
 %macro __get_heap_group_from_block_size 2
         cmp %1, tiny_block_size
         jg .%%L2
@@ -362,43 +343,35 @@ DivideBlock:
 %define get_heap_size_from_block_size(a, b) __get_heap_size_from_block_size a, b
 
 
-;rdi -> heap pointer pointer
-;rsi -> block pointer pointer
-;rdx -> heap pointer
-;rcx -> void pointer
 SearchPtr:
         __stack_push
-        push rdx ;; save heap
-        push 0 ;; push a null block ptr
-.WO:    mov rdx, [rsp + 8] ;; heap in rdx
+        push rdx
+        push 0
+.WO:    mov rdx, [rsp + 8]
         cmp rdx, 0
         je .EXTWO
-        heap_shift(rdx) ;; rdx now heapshifted
-        ;; rdx now is block
-        mov qword[rsp], rdx ;; store the block
-.WI:    cmp qword [rsp], 0 ;; check if block is null
-        je .EXTWI ;; if null exit loop
-        mov rdx, qword [rsp] ;; store block in rdx
-        block_shift(rdx) ;; shitf block
-        cmp rcx, rdx ;; compare block with ptr
-        jne .WINEXT ;; go next if not equal
+        heap_shift(rdx)
+        mov qword[rsp], rdx
+.WI:    cmp qword [rsp], 0
+        je .EXTWI
+        mov rdx, qword [rsp]
+        block_shift(rdx)
+        cmp rcx, rdx
+        jne .WINEXT
 .EXTWIRET:
-        mov rdx, [rsp + 8] ;; heap
-        mov qword[rdi], rdx ;; heap
-        mov rdx, [rsp] ;; block
-        ;cmp dword[rdx+freed], 0
-        ;sys_exit(56)
-        mov qword[rsi], rdx ;; block
-        ;; return from here
+        mov rdx, [rsp + 8]
+        mov qword[rdi], rdx
+        mov rdx, [rsp]
+        mov qword[rsi], rdx
         __return 0
 .WINEXT:
-        mov rdx, qword[rsp] ; block in rdx
-        mov rdx, [rdx+bnext] ; block->next in rdx
-        mov qword[rsp], rdx  ; store block
-        jmp .WI ;; jump to loop begining
-.EXTWI: ;; exit inner loop
-        mov rdx, [rsp + 8] ; heap in rdx
-        mov rdx, [rdx+hnext] ; heap->next in rdx
+        mov rdx, qword[rsp]
+        mov rdx, [rdx+bnext]
+        mov qword[rsp], rdx
+        jmp .WI
+.EXTWI: 
+        mov rdx, [rsp + 8]
+        mov rdx, [rdx+hnext]
         mov qword[rsp + 8], rdx
         jmp .WO
 .EXTWO: mov qword[rdi], 0
@@ -406,13 +379,11 @@ SearchPtr:
         __return 0
 
 
-;; heap in rdi
-;; use rax
 IsLastOfPreallocated:
         __stack_push
-        push 0 ;; heap_el
-        push 0 ;; group
-        push 0 ;; i
+        push 0
+        push 0
+        push 0
         mov qword[rsp + 16], HeapAnchor
         mov eax, dword[rdi+group]
         mov [rsp + 8], rax
@@ -436,23 +407,18 @@ IsLastOfPreallocated:
 .RF:    __return false
 
 
-;; rdi list_start
-;; rsi group
-;; rdx required size
 GetAvailableHeap:
         __stack_push
         push 0
         mov qword[rsp], rdi
 .L1:    cmp qword[rsp], 0
         je .EXT
-        ;========loop body ============
         mov rax, qword[rsp]
         cmp dword[rax+group], esi
         jne .ADV
         cmp dword[rax+free_size], edx
         jl .ADV
         __return rax
-;==========advance==========
 .ADV:   mov rax, qword[rsp]
         mov rax, [rax+hnext]
         mov qword[rsp], rax
@@ -460,7 +426,6 @@ GetAvailableHeap:
 .EXT:   __return 0
 
 
-;; heap in rdi
 GetLastHeap:
         __stack_push
         cmp rdi, 0
@@ -473,90 +438,80 @@ GetLastHeap:
 .EXT:   __return 0
 
 
-;; heap in rdi
-;; size in rsi
 AppendEmptyBlock:
         __stack_push
-        push rdi;; save heap
-        push 0 ;new block
-        push 0 ;last block
+        push rdi
+        push 0
+        push 0
         heap_shift(rdi)
-        mov qword[rsp+8], rdi ; save new block
+        mov qword[rsp+8], rdi
         heap_unshift(rdi)
         cmp dword[rdi+block_count], 0
-        ;mov r15d, dword[rdi+block_count];================
-        jle .L2 ;; skip to l2
+        jle .L2
         mov rdi, [rsp+8]
         call GetLastBlock
-        mov [rsp], rax ;save last block
+        mov [rsp], rax
         mov rdi, [rax+data_size]
         mov [rsp+8], rdi
         block_shift(rax)
         add [rsp+8], rax
 .L2:    mov rax, [rsp+8]
         setup_block(rax, esi)
-        mov rax, [rsp+16] ;; heap
+        mov rax, [rsp+16]
         cmp dword[rax+block_count], 0
-        jle .L3 ;skip to l3
-        mov rax, [rsp]  ; last block
-        mov rdi, [rsp+8] ;new block
+        jle .L3
+        mov rax, [rsp]
+        mov rdi, [rsp+8]
         mov [rax+bnext], rdi
         mov [rdi+bprev], rax
-.L3:    mov rax, [rsp+16] ;;heap
+.L3:    mov rax, [rsp+16]
         inc dword[rax+block_count]
-        mov rdi, [rsp+8] ;; new block
-        mov esi, dword[rdi+data_size] ;; data size
+        mov rdi, [rsp+8]
+        mov esi, dword[rdi+data_size]
         sub dword[rax+free_size], esi
         sub dword[rax+free_size], Block_size
-        ;mov rax, [rsp+8]
         block_shift(rdi)
         __return rdi
 
 
-
-
-;; size in rdi
 GetHeapOfBlockSize:
         __stack_push
         push rdi
-        push qword[HeapAnchor] ;default heap
-        push 0 ;heap group
-        push 0 ;heap
+        push qword[HeapAnchor]
+        push 0
+        push 0
         get_heap_group_from_block_size(rdi, rax)
-        mov dword[rsp+8], eax ;; store group
-        mov rdi, [rsp + 16] ;; heap
-        mov esi, dword[rsp + 8] ;; group
+        mov dword[rsp+8], eax
+        mov rdi, [rsp + 16]
+        mov esi, dword[rsp + 8]
         mov rdx, [rsp + 24]
         add rdx, Block_size
         call GetAvailableHeap
-        mov [rsp], rax ;; save heap
+        mov [rsp], rax
         cmp rax, 0
         jne .L1
-        mov edi, dword[rsp+8] ; group
-        mov esi, dword[rsp+24] ; size
+        mov edi, dword[rsp+8]
+        mov esi, dword[rsp+24]
         call CreateHeap
         cmp rax, 0
         jne .L2
         __return 0
-.L2:    mov [rsp], rax ;; save heap
+.L2:    mov [rsp], rax
         mov rdi, [HeapAnchor]
-        mov qword[rax+hnext], rdi ;; change
+        mov qword[rax+hnext], rdi
         cmp qword[rax+hnext], 0
         je .L3  
-        mov rdi, [rax+hnext] ;; ptr to next
+        mov rdi, [rax+hnext]
         mov [rdi+hprev], rax
 .L3:    mov [HeapAnchor], rax
 .L1:    __return [rsp]
 
 
-
-;rdi group
-;rsi block size
 CreateHeap:
 __stack_push
         push rdi
-        push 0 ;heap_size
-        push 0 ;heap
+        push 0 
+        push 0 
         get_heap_size_from_block_size(rsi, rax)
         mov [rsp+8], rax
         sys_mmap(0, rax, mmap_prot_flag, mmap_anon_flag, -1, 0)
@@ -567,31 +522,28 @@ __stack_push
 .L1:
 ;; zero heap here(TODO)
         mov edi, dword[rsp+16]
-        mov dword[rax + group], edi;rdi
-        mov rdi, [rsp + 8] ;; heap size
+        mov dword[rax + group], edi
+        mov rdi, [rsp + 8]
         mov [rax + total_size], rdi
         mov [rax + free_size], rdi
         sub qword[rax + free_size], Heap_size
         __return rax
 
 
-
-;; heap in rdi
 DeleteHeapIfEmpty:
         __stack_push
         push rdi
         cmp dword[rdi+block_count], 0
-        ;mov r15d, dword[rdi+block_count]
-        jne .L1
+        jg .L1
         __return 0
 .L1:    cmp qword[rdi+hprev], 0
-        jne .L2 
+        je .L2 
         mov rdi, [rdi+hprev]
         mov rax, [rdi+hnext]
         mov [rdi+hnext], rax
 .L2:    mov rdi, [rsp]
         cmp qword[rdi+hnext], 0
-        jne .L4
+        je .L4
         mov rdi, [rdi+hnext]
         mov rax, [rdi+hprev]
         mov [rdi+hprev], rax
@@ -609,12 +561,12 @@ DeleteHeapIfEmpty:
         sys_munmap(rdi, rax)
 .L5:    __return 0
 
-;size in rdi
+
 TryFillingAvailableBlock:
 __stack_push
         push rdi
-        push 0 ;block
-        push 0 ;heap
+        push 0
+        push 0
         lea rsi, [rsp]
         lea rdx, [rsp+8]
         call FindAvailableBlock
@@ -631,14 +583,12 @@ __stack_push
 
 .EXT:   __return 0
 
-;; rdi -> size
-;; rsi -> heap result ptr
-;; rdx -> block result ptr
+
 FindAvailableBlock:
         __stack_push
-        push HeapAnchor ; heap anchor
-        push 0 ; block
-        push 0 ; group
+        push HeapAnchor
+        push 0
+        push 0
         get_heap_group_from_block_size(rdi, rax)
         mov [rsp], rax
 .OUTERLOOP:
@@ -646,27 +596,25 @@ FindAvailableBlock:
         je .EXITOUTER
         mov rax, [rsp+16]
         heap_shift(rax)
-        mov [rsp+8], rax ;; block
+        mov [rsp+8], rax
 .INNERLOOP:
         mov rax, [rsp+16]
-        mov rax, [rax+group] ;; heap group in rax
-        cmp rax, qword[rsp]  ;; compare
+        mov rax, [rax+group]
+        cmp rax, qword[rsp]
         jne .EXITINNER
-        cmp qword[rsp+8], 0 ;; check if block is null
+        cmp qword[rsp+8], 0
         je .EXITINNER
-        ;=============================loop body
-        cmp dword[rsp+freed], true ;; source of error
+        cmp dword[rsp+freed], true
         jne .ADVINNER
         mov eax, edi
         add eax, Block_size
-        cmp eax, dword[rsp+data_size] ;; error
+        cmp eax, dword[rsp+data_size]
         jl .ADVINNER
         mov rax, [rsp+16]
         mov [rsi], rax
         mov rax, [rsp+8]
         mov [rdx], rax
         __return 0
-        ;=============================
 .ADVINNER:
         mov rax, [rsp+8]
         mov rax, [rax+bnext]
@@ -688,13 +636,13 @@ FindAvailableBlock:
 ;size in rdi
 StartMalloc:
         __stack_push
-        push 0 ;; heap
-        push 0 ;; block
-        push 0 ;; res ptr
-        cmp rdi, 0 ;; check if size is zero
+        push 0
+        push 0
+        push 0
+        cmp rdi, 0
         jne .L1
         __return 0
-.L1:    alignforward16(rdi) ;; aligned size in rax
+.L1:    alignforward16(rdi)
         push rax
         mov rdi, rax
         call TryFillingAvailableBlock
@@ -707,38 +655,33 @@ StartMalloc:
         cmp rax, 0
         jne .L3
         __return 0
- .L3:   mov qword[rsp+16], rax ;; store heap
+ .L3:   mov qword[rsp+16], rax
         mov rdi, rax
-        mov esi, dword[rsp];size
+        mov esi, dword[rsp]
         call AppendEmptyBlock
-        ;; block returned in rax
         __return rax
 
 
-
-
-;; ptr in rdi
 StartFree:
         __stack_push
-        push qword[HeapAnchor];heap
-        push 0 ; block
-        push 0 ; ret
+        push qword[HeapAnchor]
+        push 0
+        push 0
         cmp qword[HeapAnchor], 0
         jne .L1
         __return 0
 .L1:    cmp rdi, 0
         jne .L2
         __return 0
-.L2:    mov rcx, rdi ; ptr to searxh
-        lea rdi, [rsp+16] ; heap ptr
-        lea rsi, [rsp+8] ; block ptr
-        mov rdx, [rsp+16] ; heap
+.L2:    mov rcx, rdi
+        lea rdi, [rsp+16]
+        lea rsi, [rsp+8]
+        mov rdx, [rsp+16]
         call SearchPtr
-        cmp qword[rsp+8], 0 ;check if block is null
+        cmp qword[rsp+8], 0
         jne .L3
-        ;sys_exit(45)
         __return 0
-.L3:    cmp qword[rsp+16], 0 ; check if heap is null
+.L3:    cmp qword[rsp+16], 0
         jne .L4
         __return 0
 .L4:    mov rax, [rsp+8]
@@ -754,7 +697,7 @@ StartFree:
         call MergeBlock
         cmp rax, 0
         je .L6
-        mov [rsp+8], rax ;; source of error
+        mov [rsp+8], rax
 .L6:    mov rdi, [rsp+16]
         mov rsi, [rsp+8]
         call RemoveBlockIfLast
